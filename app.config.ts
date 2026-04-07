@@ -9,10 +9,14 @@ const runtimeVersion = process.env.EXPO_PUBLIC_RUNTIME_VERSION?.trim() || '0.1.0
 const config: ExpoConfig = {
   name: 'SVIT Connect',
   slug: 'svit-connect',
+  owner: 'brnaveenkumar07',
   scheme: 'svit-connect',
   version: runtimeVersion,
   orientation: 'portrait',
   userInterfaceStyle: 'light',
+  android: {
+    package: 'com.brnaveenkumar07.svitconnect',
+  },
   plugins: ['expo-router'],
   experiments: {
     typedRoutes: true,
