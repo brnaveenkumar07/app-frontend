@@ -3,7 +3,7 @@ import axios from 'axios';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { api, apiConfigError } from '../../lib/api';
+import { api, apiConfigError, candidateApiUrls, getActiveApiUrl } from '../../lib/api';
 import { useFeedback } from '../../providers/feedback-provider';
 import { useAuthStore } from '../../store/auth-store';
 import { AuthSession } from '../../types/auth';
@@ -63,7 +63,8 @@ export function useLogin() {
       }
 
       if (!mutation.error.response) {
-        return 'Unable to reach the API server. Verify EXPO_PUBLIC_API_URL and make sure the backend is running.';
+        const fallbackCount = Math.max(candidateApiUrls.length - 1, 0);
+        return `Unable to reach the API server at ${getActiveApiUrl()}.${fallbackCount ? ` The app also tried ${fallbackCount} fallback endpoint${fallbackCount > 1 ? 's' : ''}.` : ''}`;
       }
 
       const responseMessage =

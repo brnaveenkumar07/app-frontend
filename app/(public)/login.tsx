@@ -6,7 +6,7 @@ import { Pressable, View } from 'react-native';
 import { Button, HelperText, Surface, Text, TextInput } from 'react-native-paper';
 import { Screen } from '../../src/components/ui/screen';
 import { useLogin } from '../../src/features/auth/use-login';
-import { apiConfigError, resolvedApiUrl } from '../../src/lib/api';
+import { apiConfigError, candidateApiUrls, getActiveApiUrl, isSeededDemoApiUrl } from '../../src/lib/api';
 
 const formCardStyle = {
   borderRadius: 28,
@@ -29,12 +29,14 @@ const inputTheme = {
 export default function LoginScreen() {
   const { form, mutation, errorMessage } = useLogin();
   const [showPassword, setShowPassword] = useState(false);
+  const resolvedApiUrl = getActiveApiUrl();
+  const showDemoAccess = isSeededDemoApiUrl(resolvedApiUrl);
 
   return (
     <Screen>
       <View style={{ marginTop: 40, marginBottom: 28 }}>
         <Text variant="headlineLarge" style={{ color: '#f3f7fb' }}>
-          SVIT Connect
+          CampusFlow
         </Text>
         <Text variant="bodyLarge" style={{ color: '#9db0c5', marginTop: 8 }}>
           Attendance, performance, and academic operations in one professional mobile workspace.
@@ -190,20 +192,34 @@ export default function LoginScreen() {
         elevation={0}
       >
         <Text variant="titleSmall" style={{ color: '#f3f7fb' }}>
-          Demo access
+          {showDemoAccess ? 'Demo access' : 'Connection details'}
         </Text>
-        <Text variant="bodySmall" style={{ color: '#9db0c5', marginTop: 8 }}>
-          Accounts: `admin@svit.edu`, `teacher@svit.edu`, `student@svit.edu`
-        </Text>
-        <Text variant="bodySmall" style={{ color: '#9db0c5', marginTop: 6 }}>
-          Password: `Password@123`
-        </Text>
-        <Text variant="bodySmall" style={{ color: '#8ea3ba', marginTop: 6 }}>
-          School code: `SVIT`
-        </Text>
+        {showDemoAccess ? (
+          <>
+            <Text variant="bodySmall" style={{ color: '#9db0c5', marginTop: 8 }}>
+              Accounts: `admin@svit.edu`, `teacher@svit.edu`, `student@svit.edu`
+            </Text>
+            <Text variant="bodySmall" style={{ color: '#9db0c5', marginTop: 6 }}>
+              Password: `Password@123`
+            </Text>
+            <Text variant="bodySmall" style={{ color: '#8ea3ba', marginTop: 6 }}>
+              School code: `SVIT`
+            </Text>
+          </>
+        ) : (
+          <Text variant="bodySmall" style={{ color: '#9db0c5', marginTop: 8 }}>
+            This app is connected to a non-demo backend. Use credentials that exist on that server. The built-in demo
+            accounts only work when the app reaches a seeded local API.
+          </Text>
+        )}
         <Text variant="bodySmall" style={{ color: '#8ea3ba', marginTop: 6 }}>
           API: {resolvedApiUrl}
         </Text>
+        {candidateApiUrls.length > 1 ? (
+          <Text variant="bodySmall" style={{ color: '#8ea3ba', marginTop: 6 }}>
+            Fallbacks: {candidateApiUrls.slice(1).join(', ')}
+          </Text>
+        ) : null}
         {apiConfigError ? (
           <Text variant="bodySmall" style={{ color: '#fca5a5', marginTop: 6 }}>
             {apiConfigError}

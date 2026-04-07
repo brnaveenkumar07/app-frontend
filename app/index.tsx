@@ -54,7 +54,7 @@ export default function LandingScreen() {
           A cleaner way to manage attendance, performance, and institutional workflows.
         </Text>
         <Text variant="bodyLarge" style={{ color: '#9db0c5', marginTop: 14, lineHeight: 24 }}>
-          SVIT Connect brings together core school operations in one disciplined mobile experience designed for
+          CampusFlow brings together core school operations in one disciplined mobile experience designed for
           administrators, faculty, and students.
         </Text>
         <View style={{ flexDirection: 'row', gap: 12, marginTop: 22 }}>

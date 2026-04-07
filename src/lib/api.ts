@@ -1,10 +1,20 @@
 import axios from 'axios';
+import type { InternalAxiosRequestConfig } from 'axios';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { useAuthStore } from '../store/auth-store';
 import { createAuthSessionClient } from './auth-session-client';
 
+const productionApiUrl = 'https://app-backend-rust-seven.vercel.app/api';
 const fallbackApiUrl = 'http://localhost:3000/api';
+const demoApiHosts = new Set(['localhost', '127.0.0.1', '10.0.2.2', '172.30.132.144']);
+const apiFailoverState = {
+  activeApiUrl: productionApiUrl,
+};
+
+type RequestConfigWithApiFailover = InternalAxiosRequestConfig & {
+  _apiBaseUrlAttemptCount?: number;
+};
 
 function inferExpoHostApiUrl() {
   const hostUri = Constants.expoConfig?.hostUri?.trim();
@@ -24,6 +34,10 @@ function inferExpoHostApiUrl() {
 
 function isExpoGoOnPhysicalDevice() {
   return Constants.executionEnvironment === 'storeClient';
+}
+
+function isStandaloneBuild() {
+  return Constants.executionEnvironment === 'standalone';
 }
 
 function isLocalOnlyHostname(hostname: string) {
@@ -52,11 +66,6 @@ function resolveConfiguredApiUrl() {
   return trimmed;
 }
 
-const rawApiUrl =
-  resolveConfiguredApiUrl() ??
-  inferExpoHostApiUrl() ??
-  fallbackApiUrl;
-
 function normalizeApiUrl(input: string) {
   const trimmed = input.trim().replace(/\/+$/, '');
 
@@ -82,10 +91,70 @@ function normalizeApiUrl(input: string) {
   }
 }
 
-export const resolvedApiUrl = normalizeApiUrl(rawApiUrl);
+function resolveConfiguredApiFallbackUrls() {
+  const rawFallbackUrls =
+    process.env.EXPO_PUBLIC_API_URL_FALLBACKS ?? Constants.expoConfig?.extra?.apiUrlFallbacks;
+
+  if (!rawFallbackUrls || typeof rawFallbackUrls !== 'string') {
+    return [];
+  }
+
+  return rawFallbackUrls
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function dedupeUrls(urls: string[]) {
+  return [...new Set(urls)];
+}
+
+function buildCandidateApiUrls() {
+  const configuredApiUrl = resolveConfiguredApiUrl();
+  const inferredExpoHostApiUrl = inferExpoHostApiUrl();
+  const configuredFallbackUrls = resolveConfiguredApiFallbackUrls();
+
+  const rawCandidates = isStandaloneBuild()
+    ? [configuredApiUrl, productionApiUrl, ...configuredFallbackUrls, inferredExpoHostApiUrl, fallbackApiUrl]
+    : [inferredExpoHostApiUrl, configuredApiUrl, productionApiUrl, ...configuredFallbackUrls, fallbackApiUrl];
+
+  return dedupeUrls(
+    rawCandidates
+      .filter((value): value is string => Boolean(value))
+      .map((value) => normalizeApiUrl(value)),
+  );
+}
+
+export const candidateApiUrls = buildCandidateApiUrls();
+apiFailoverState.activeApiUrl = candidateApiUrls[0] ?? normalizeApiUrl(productionApiUrl);
+
+export function getActiveApiUrl() {
+  return apiFailoverState.activeApiUrl;
+}
+
+export function getResolvedApiUrl() {
+  return getActiveApiUrl();
+}
+
+export const resolvedApiUrl = getResolvedApiUrl();
+
+export function isSeededDemoApiUrl(input: string) {
+  try {
+    const parsed = new URL(input);
+    return demoApiHosts.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
 
 function resolveApiConfigError() {
   if (!isExpoGoOnPhysicalDevice()) {
+    return null;
+  }
+
+  const inferredExpoHostApiUrl = inferExpoHostApiUrl();
+
+  if (inferredExpoHostApiUrl) {
     return null;
   }
 
@@ -93,17 +162,17 @@ function resolveApiConfigError() {
   const trimmedConfiguredApiUrl = configuredApiUrl?.trim() ?? '';
 
   if (!trimmedConfiguredApiUrl || trimmedConfiguredApiUrl.includes('YOUR_LAN_IP')) {
-    return 'Set EXPO_PUBLIC_API_URL to your public API tunnel URL before signing in.';
+    return null;
   }
 
   try {
     const parsed = new URL(trimmedConfiguredApiUrl);
 
     if (isLocalOnlyHostname(parsed.hostname)) {
-      return 'Expo Go on a phone cannot use localhost, 127.0.0.1, or 10.0.2.2. Set EXPO_PUBLIC_API_URL to your public API tunnel URL.';
+      return 'This device cannot reach a localhost API directly. Start Expo in LAN mode on the same network, or let the app use the deployed API.';
     }
   } catch {
-    return 'EXPO_PUBLIC_API_URL is invalid. Set it to your public API tunnel URL.';
+    return 'The configured API URL is invalid.';
   }
 
   return null;
@@ -112,14 +181,45 @@ function resolveApiConfigError() {
 export const apiConfigError = resolveApiConfigError();
 
 export const api = axios.create({
-  baseURL: resolvedApiUrl,
   timeout: 10000,
 });
 
 const authApi = axios.create({
-  baseURL: resolvedApiUrl,
   timeout: 10000,
 });
+
+function installApiBaseUrlFailover(client: typeof api) {
+  client.interceptors.request.use((config) => {
+    config.baseURL = getActiveApiUrl();
+    return config;
+  });
+
+  client.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+      if (!axios.isAxiosError(error) || error.response || !error.config) {
+        return Promise.reject(error);
+      }
+
+      const requestConfig = error.config as RequestConfigWithApiFailover;
+      const attemptCount = requestConfig._apiBaseUrlAttemptCount ?? 0;
+      const nextApiUrl = candidateApiUrls[attemptCount + 1];
+
+      if (!nextApiUrl) {
+        return Promise.reject(error);
+      }
+
+      requestConfig._apiBaseUrlAttemptCount = attemptCount + 1;
+      apiFailoverState.activeApiUrl = nextApiUrl;
+      requestConfig.baseURL = nextApiUrl;
+
+      return client.request(requestConfig);
+    },
+  );
+}
+
+installApiBaseUrlFailover(api);
+installApiBaseUrlFailover(authApi);
 
 const authSessionClient = createAuthSessionClient(api, authApi, {
   getSession: () => useAuthStore.getState().session,
