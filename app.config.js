@@ -9,7 +9,7 @@ const hasValidProjectId = Boolean(rawProjectId && rawProjectId !== 'your-eas-pro
 const runtimeVersion = process.env.EXPO_PUBLIC_RUNTIME_VERSION?.trim() || '0.1.0';
 const config = {
     name: 'CampusFlow',
-    slug: 'campus-flow',
+    slug: 'svit-connect',
     owner: 'brnaveenkumar07',
     scheme: 'campus-flow',
     version: runtimeVersion,
