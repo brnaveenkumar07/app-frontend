@@ -4,3 +4,14 @@
 
 expo-env.d.ts
 # @end expo-cli
+node_modules
+dist
+.tmp-tests
+.expo
+.expo-shared
+android
+ios
+.env
+.env.*
+!.env.example
+*.log
