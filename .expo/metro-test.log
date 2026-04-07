@@ -1,0 +1,9 @@
+
+> mobile@0.1.0 start
+> expo start --go --host lan
+
+env: load .env
+env: export EXPO_PUBLIC_API_URL EXPO_PUBLIC_RUNTIME_VERSION EXPO_NO_DEPENDENCY_VALIDATION
+Starting project at C:\Users\navee\Desktop\SVIT-Hackathon\apps\mobile
+› Port 8081 is being used by another process
+› Skipping dev server
